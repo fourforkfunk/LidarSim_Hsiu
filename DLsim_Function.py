@@ -1182,6 +1182,20 @@ class Signal:
     # This function uses a signal climatology file to make more "realistic" signal
     # loss for the simulated lidar data.
     ###############################################################################
+    def Range_Weighting_function(pulse_width,gate_width):
+        c =3e8
+        # pulse_width = namelist['pulse_width'] 
+        # gate_width = namelist['gate_width']
+        r_high = np.arange(1,5001)
+        # from scipy.special import erf
+
+        rwf = (1/(c*gate_width*1e-9))*\
+              (erf((4*np.sqrt(np.log(2))*(r_high -3000)/(c*pulse_width*1e-9)) + np.sqrt(np.log(2))*gate_width/pulse_width)-\
+               erf((4*np.sqrt(np.log(2))*(r_high -3000)/(c*pulse_width*1e-9)) - np.sqrt(np.log(2))*gate_width/pulse_width))
+        return rwf
+            
+        
+        
     def signal_sim(ray, file, r, nyquist_velocity, points_per_gate, num_pulse):
         
         vr = np.copy(ray)
@@ -1234,12 +1248,11 @@ class Signal:
     # gaussian pusle power
     ##############################################################################
 
-    def gaussian_pulse(vr,pulse_width,gate_width,maximum_range,nyquist_velocity,cut_off,r_sample,
-                       key, elev, namelist):
+    def gaussian_pulse(vr,lidar_parameter,cut_off,r_sample, key, elev, namelist):
         
         
         c = 3e8
-        r_high = np.arange(1,(maximum_range*1000)+1)
+        r_high = np.arange(1,(lidar_parameter['maximum_range']*1000)+1)
         
         if ((key == 1) & (namelist['dbs1'] == 1)):
             r = np.arange(namelist['dbs_start_height'],namelist['dbs_end_height']
@@ -1257,14 +1270,14 @@ class Signal:
              r = np.arange(namelist['dbs_start_height'],namelist['dbs_end_height']
                                    +1,namelist['dbs_spacing'])/np.cos(90-np.deg2rad(elev))
         else:
-            r = np.arange(3e8*gate_width*1e-9/4.0,maximum_range*1000+1,3e8*gate_width*1e-9/2.0)
+            r = np.arange(3e8 * lidar_parameter['gate_width'] * 1e-9 / 4.0 ,lidar_parameter['maximum_range'] * 1000 + 1, 3e8 * lidar_parameter['gate_width'] * 1e-9 / 2.0)
         
-        rwf = (1/(c*gate_width*1e-9))*(erf((4*np.sqrt(np.log(2))*(r_high[None,:] - r[:,None])/(c*pulse_width*1e-9))
-                                                   + np.sqrt(np.log(2))*gate_width/pulse_width)
-                                                   -erf((4*np.sqrt(np.log(2))*(r_high[None,:] - r[:,None])/(c*pulse_width*1e-9))
-                                                   -np.sqrt(np.log(2))*gate_width/pulse_width))
+        rwf = (1/(c*lidar_parameter['gate_width'] * 1e-9))*(erf((4 * np.sqrt(np.log(2))*(r_high[None,:] - r[:,None])/(c*lidar_parameter['pulse_width']*1e-9)) + np.sqrt(np.log(2))*lidar_parameter['gate_width']/lidar_parameter['pulse_width'])
+                                                           -erf((4 * np.sqrt(np.log(2))*(r_high[None,:] - r[:,None])/(c*lidar_parameter['pulse_width']*1e-9))  -np.sqrt(np.log(2))*lidar_parameter['gate_width']/lidar_parameter['pulse_width']))
         
-        vr_interp = np.interp(r_high,r_sample,vr,left=np.nan,right=np.nan)
+        # vr is the vr interpolated by the model dimsnsion
+        vr_interp = np.interp(r_high,r_sample,vr,left=np.nan,right=np.nan) # all vr intepolated again along the beam
+
         foo = np.where(~np.isnan(vr_interp))[0]
         
         if len(foo) > 0:
@@ -1272,16 +1285,22 @@ class Signal:
             cut_max = foo[-1]+1 - cut_off
         else:
             cut_min = cut_off
-            cut_max = maximum_range-cut_off
+            cut_max = lidar_parameter['maximum_range'] - cut_off
         
         vr_interp[np.isnan(vr_interp)] = 0.0
         
         
-        integrand = vr_interp*rwf
+        integrand = vr_interp * rwf # VR * RWF
         
         
-        vr_lidar = np.trapz(integrand,axis=1)
-        
+        vr_lidar = np.trapz(integrand,axis=1)  # summation along the RWF
+        print('rwf'+str(rwf.shape))
+        print('vr'+str(vr.shape))
+        print('vr_interp'+str(vr_interp.shape))
+        print('vr_lidar '+str(vr_lidar .shape))
+        # print('rwf'+vr_interp.size)
+
+        sys.exit()
        
         foo1 = np.where(r > cut_min)[0]
         foo2 = np.where(r < cut_max)[0]
@@ -1296,10 +1315,16 @@ class Signal:
         
         # Filter out the gates with velocity higher than the nyquist velocity
         
-        foo = np.where(np.abs(vr_lidar) > nyquist_velocity)[0]
+        foo = np.where(np.abs(vr_lidar) > lidar_parameter['nyquist_velocity'])[0]
         vr_lidar[foo] = np.nan
         
-        return vr_lidar
+        # SW calculation---------------------------------------------------------------------------------------------
+        
+        
+        
+        
+        
+        return vr_lidar,vr_lidar
     
     
     ##############################################################################
@@ -1309,87 +1334,93 @@ class Signal:
     # model time.
     ##############################################################################
     
-    def sim_observations(lidar_x, lidar_y, lidar_z, pulse_width, gate_width, sample_resolution, maximum_range,
-                         nyquist_velocity, coords, model_type, model_time, model_step, files, instantaneous_scan,
-                         prefix, model_frequency, nscl, clouds, scan_key,
-                         sim_signal, signal_file, namelist, xx = None, yy = None, transform = None):
+    # def sim_observations(lidar_x, lidar_y, lidar_z, pulse_width, gate_width, sample_resolution, maximum_range,
+    #                      nyquist_velocity, coords, model_type, model_time, model_step, files, instantaneous_scan,
+    #                      prefix, model_frequency, nscl, clouds, scan_key,
+    #                      sim_signal, signal_file, namelist, xx = None, yy = None, transform = None):
+    def sim_observations(lidar_parameter, namelist, xx = None, yy = None, transform = None):
         
-        if 3e8*gate_width*1e-9/2.0 < sample_resolution:
-            r = np.arange(1,maximum_range*1000,3e8*gate_width*1e-9/2.0)
+        if 3e8 * lidar_parameter['gate_width']* 1e-9 / 2.0 < lidar_parameter['sample_resolution']:
+            r = np.arange(1,lidar_parameter['maximum_range'] * 1000,3e8 * lidar_parameter['gate_width'] * 1e-9 /2.0)
         else:
-            r = np.arange(sample_resolution,maximum_range*1000+sample_resolution,sample_resolution)
-        
+            r = np.arange(lidar_parameter['sample_resolution'],lidar_parameter['maximum_range'] * 1000 + lidar_parameter['sample_resolution'],lidar_parameter['sample_resolution'])
+        print(r.shape)
         # Find the maximum and minimum range needed for full gate sample
-        c =3e8
-        r_high = np.arange(1,5001)
-        rwf = (1/(c*gate_width*1e-9))*(erf((4*np.sqrt(np.log(2))*(r_high -3000)/(c*pulse_width*1e-9))
-                                                   + np.sqrt(np.log(2))*gate_width/pulse_width)
-                                                   -erf((4*np.sqrt(np.log(2))*(r_high -3000)/(c*pulse_width*1e-9))
-                                                   -np.sqrt(np.log(2))*gate_width/pulse_width))
-        foo = np.where(rwf > 0.001)[0]
+        # c =3e8
+        # r_high = np.arange(1,5001)
+        # rwf = (1/(c*gate_width*1e-9))*\
+        #       (erf((4*np.sqrt(np.log(2))*(r_high -3000)/(c*pulse_width*1e-9)) + np.sqrt(np.log(2))*gate_width/pulse_width)-\
+        #        erf((4*np.sqrt(np.log(2))*(r_high -3000)/(c*pulse_width*1e-9)) - np.sqrt(np.log(2))*gate_width/pulse_width))
+        lidar_parameter['rwf'] =  Signal.Range_Weighting_function(lidar_parameter['pulse_width'],lidar_parameter['gate_width'])        
+                 
+                  
+        foo = np.where(lidar_parameter['rwf'] > 0.001)[0]
         #cut_off = int(len(foo)/2)
         cut_off = 0
+        # lidar_parameter['
         
-        
-        if instantaneous_scan == 0:
-            num = len(coords)
+        if lidar_parameter['instantaneous_scan'] == 0:
+            num = len(lidar_parameter['coords'])
         else:
-            num = len(coords[0])
+            num = len(lidar_parameter['coords'][0])
             
-        sim_obs = []    
+        sim_obs_vr = []   
+        sim_obs_sw = []    
+
         for j in range(num):
-            if instantaneous_scan == 0:
-                x = r*np.cos(np.radians(coords[j][1]))*np.sin(np.radians(coords[j][0])) + lidar_x
-                y = r*np.cos(np.radians(coords[j][1]))*np.cos(np.radians(coords[j][0])) + lidar_y
-                z = r*np.sin(np.radians(coords[j][1])) + lidar_z
-                key = scan_key[j]
-                elev = coords[j][1]
-                azim = coords[j][0]
+            if lidar_parameter['instantaneous_scan'] == 0:
+                x =  r * np.cos(np.radians(lidar_parameter['coords'][j][1])) * np.sin(np.radians(lidar_parameter['coords'][j][0])) + lidar_parameter['lidar_x']
+                y =  r * np.cos(np.radians(lidar_parameter['coords'][j][1])) * np.cos(np.radians(lidar_parameter['coords'][j][0])) + lidar_parameter['lidar_y']
+                z =  r * np.sin(np.radians(lidar_parameter['coords'][j][1])) + lidar_parameter['lidar_z']
+                key = lidar_parameter['scan_key'][j]
+                elev = lidar_parameter['coords'][j][1]
+                azim = lidar_parameter['coords'][j][0]
                 
-            else:
-                x = r*np.cos(np.radians(coords[0][j,1]))*np.sin(np.radians(coords[0][j,0])) + lidar_x
-                y = r*np.cos(np.radians(coords[0][j,1]))*np.cos(np.radians(coords[0][j,0])) + lidar_y
-                z = r*np.sin(np.radians(coords[0][j,1])) + lidar_z
-                key = scan_key[0][j]
-                elev = coords[0][j,1]
-                azim = coords[0][j,0]
+            else:              
+                x =  r * np.cos(np.radians(lidar_parameter['coords'][0][j,1])) * np.sin(np.radians(lidar_parameter['coords'][0][j,0])) + lidar_parameter['lidar_x']
+                y =  r * np.cos(np.radians(lidar_parameter['coords'][0][j,1])) * np.cos(np.radians(lidar_parameter['coords'][0][j,0])) + lidar_parameter['lidar_y']
+                z =  r * np.sin(np.radians(lidar_parameter['coords'][0][j,1])) + lidar_parameter['lidar_z']
+                key = lidar_parameter['scan_key'][0][j]
+                elev = lidar_parameter['coords'][0][j,1]
+                azim = lidar_parameter['coords'][0][j,0]
+                
             
-            if model_type == 1:
+            if lidar_parameter['model_type'] == 1:
                 #try:
-                foo = np.flatnonzero(np.core.defchararray.find(np.array(files),model_time.strftime('%Y-%m-%d_%H:%M:%S'))!=-1)[0]
-                temp = Read_file.get_wrf_data(x,y,z,lidar_x,lidar_y,lidar_z,files[foo],clouds,xx,yy,transform)
+                foo = np.flatnonzero(np.core.defchararray.find(np.array(lidar_parameter['files']),lidar_parameter['model_time'].strftime('%Y-%m-%d_%H:%M:%S'))!=-1)[0]
+                temp = Read_file.get_wrf_data(x,y,z,lidar_parameter['lidar_x'],lidar_parameter['lidar_y'],lidar_parameter['lidar_z'],lidar_parameter['files'][foo],lidar_parameter['clouds'],xx,yy,transform)
                 #except:
                 #    print('ERROR: No model data was found for ' + str(model_time))
                 #    sys.exit()
             
-            elif model_type == 2:
-                foo = np.where(np.array(files) == prefix + '.' + str(int(model_time/model_step)))[0][0]
-                temp = Read_file.get_fasteddy_data(x,y,z,lidar_x,lidar_y,lidar_z,files[foo])
+            elif lidar_parameter['model_type'] == 2:
+                foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '.' + str(int(lidar_parameter['model_time']/lidar_parameter['model_step'])))[0][0]
+                temp = Read_file.get_fasteddy_data(x,y,z,lidar_parameter['lidar_x'],lidar_parameter['lidar_y'],lidar_parameter['lidar_z'],lidar_parameter['files'][foo])
                 
-            elif model_type == 3:
-                if int(model_time/model_frequency) < 10:
-                    foo = np.where(np.array(files) == prefix + '.00' + str(int(model_time/model_frequency)))[0][0]
-                elif int(model_time/model_frequency) < 100:
-                    foo = np.where(np.array(files) == prefix + '.0' + str(int(model_time/model_frequency)))[0][0]
+            elif lidar_parameter['model_type'] == 3:
+                if int(lidar_parameter['model_time']/lidar_parameter['model_frequency']) < 10:
+                    foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '.00' + str(int(lidar_parameter['model_time']/lidar_parameter['model_frequency'])))[0][0]
+                elif int(lidar_parameter['model_time']/lidar_parameter['model_frequency']) < 100:
+                    foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '.0'  + str(int(lidar_parameter['model_time']/lidar_parameter['model_frequency'])))[0][0]
                 else:
-                    foo = np.where(np.array(files) == prefix + '.' + str(int(model_time/model_frequency)))[0][0]
+                    foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '.'   + str(int(lidar_parameter['model_time']/lidar_parameter['model_frequency'])))[0][0]
                 
-                temp = Read_file.get_ncarles_data(x,y,z,lidar_x,lidar_y,lidar_z,files[foo],nscl)
+                temp = Read_file.get_ncarles_data(x,y,z,lidar_parameter['lidar_x'],lidar_parameter['lidar_y'],lidar_parameter['lidar_z'],lidar_parameter['files'][foo],lidar_parameter['nscl'])
             
-            elif model_type == 4:
-                foo = np.where(np.array(files) == prefix + 'u.nc')[0][0]
-                u_file = files[foo]
+            elif lidar_parameter['model_type'] == 4:
+                foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + 'u.nc')[0][0]
+                u_file = lidar_parameter['files'][foo]
                 
-                foo = np.where(np.array(files) == prefix + 'v.nc')[0][0]
-                v_file = files[foo]
+                foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + 'v.nc')[0][0]
+                v_file = lidar_parameter['files'][foo]
                 
-                foo = np.where(np.array(files) == prefix + 'w.nc')[0][0]
-                w_file = files[foo]
+                foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + 'w.nc')[0][0]
+                w_file = lidar_parameter['files'][foo]
                 
-                temp = Read_file.get_MicroHH_data(x,y,z,lidar_x,lidar_y,lidar_z,model_time, u_file, v_file, w_file)
+                temp = Read_file.get_MicroHH_data(x,y,z,lidar_parameter['lidar_x'],lidar_parameter['lidar_y'],lidar_parameter['lidar_z'],lidar_parameter['model_time'], u_file, v_file, w_file)
             
-            elif model_type == 5:
-                print(model_time, model_frequency)
+            elif lidar_parameter['model_type'] == 5:
+                print(lidar_parameter['model_time'], lidar_parameter['model_frequency'])
                 # Come back to this as it can be done better
                 # if int(model_time/model_frequency) < 10:
                 #     print(np.where(np.array(files) == prefix + '_00000' + str(int(model_time/model_frequency))+'.nc'))
@@ -1407,24 +1438,28 @@ class Signal:
                 
                 foo =0 
                 
-                temp = Read_file.get_cm1_data(x,y,z,lidar_x,lidar_y,lidar_z,files[foo],clouds,namelist['turb'],az=azim,el=elev)
-                
+                temp = Read_file.get_cm1_data(x,y,z,lidar_parameter['lidar_x'],lidar_parameter['lidar_y'],lidar_parameter['lidar_z'],lidar_parameter['files'][foo],lidar_parameter['clouds'],namelist['turb'],az=azim,el=elev)
+                # temp = get_cm1_data(x,y,z,lidar_x,lidar_y,lidar_z,files[foo],clouds,namelist['turb'],az=azim,el=elev)
+
             else:
                 print('ERROR: Unknown model type specified')
                 return [-999]
             
             # Now we get the vr that the lidar would observe assuming a gaussian pulse
-            temp = Signal.gaussian_pulse(temp,pulse_width,gate_width,maximum_range,nyquist_velocity,cut_off,r,
-                                          key,elev,namelist)
+            temp_vr,temp_sw  = Signal.gaussian_pulse(temp,lidar_parameter,cut_off,r,key,elev,namelist)
+            # def gaussian_pulse(vr,pulse_width,gate_width,maximum_range,nyquist_velocity,cut_off,r_sample,
+            #                    key, elev, namelist):
             
-            if sim_signal == 1:
-                temp = Signal.signal_sim(temp, signal_file, np.arange(3e8*gate_width*1e-9/4.0,maximum_range*1000+1,3e8*gate_width*1e-9/2.0),
-                                  nyquist_velocity, namelist['points_per_gate'], namelist['num_pulses'])
+            if lidar_parameter['sim_signal'] == 1:
+                temp_vr,temp_sw = Signal.signal_sim(temp, lidar_parameter['signal_file'], np.arange(3e8 * lidar_parameter['gate_width'] * 1e-9 / 4.0,
+                                         lidar_parameter['maximum_range'] * 1000 + 1, 3e8 * lidar_parameter['gate_width'] * 1e-9 / 2.0),
+                                         lidar_parameter['nyquist_velocity'], namelist['points_per_gate'], namelist['num_pulses'])
                 
                 
-                
-            sim_obs.append(temp)
-        return sim_obs
+            print(j)   
+            sim_obs_vr.append(temp_vr)
+            sim_obs_sw.append(temp_sw)
+        return sim_obs_vr,sim_obs_sw,temp
     
     
     

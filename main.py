@@ -267,14 +267,59 @@ if __name__ == "__main__":
         # If the are rays to be simulated, we perform them
         if len(foo[bar]) > 0:
             print("Starting Simulations for " + str(model_time[i]))
-            temp = DLsim.Signal.sim_observations(temp_lidar_x,temp_lidar_y,namelist['lidar_alt'], namelist['pulse_width'],
-                                namelist['gate_width'], namelist['sample_resolution'], namelist['maximum_range'], namelist['nyquist_velocity'],
-                                [az_el_coords[x] for x in foo[bar]],namelist['model'],model_time[i],namelist['model_timestep'],files, namelist['instantaneous_scan'],
-                                dname,namelist['model_frequency'],namelist['ncar_les_nscl'],
-                                namelist['clouds'],[scan_key[x] for x in foo[bar]],
-                                namelist['sim_signal'],namelist['signal_climo_file'],
-                                namelist, xx, yy, transformer)
-            # sys.exit()
+            
+            lidar_parameter={'lidar_x':temp_lidar_x,
+                             'lidar_y':temp_lidar_y,
+                             'lidar_z':namelist['lidar_alt'],
+                             'pulse_width':namelist['pulse_width'],
+                             'gate_width':namelist['gate_width'],
+                             'sample_resolution':namelist['sample_resolution'],
+                             'maximum_range':namelist['maximum_range'],
+                             'nyquist_velocity': namelist['nyquist_velocity'],
+                             'coords':[az_el_coords[x] for x in foo[bar]],
+                             'model_type':namelist['model'],
+                             'model_time':model_time[i],
+                             'model_step':namelist['model_timestep'],
+                             'files':files,
+                             'instantaneous_scan':namelist['instantaneous_scan'],
+                             'prefix':dname,
+                             'model_frequency':namelist['model_frequency'],
+                             'nscl':namelist['ncar_les_nscl'],
+                             'clouds':namelist['clouds'],
+                             'scan_key':[scan_key[x] for x in foo[bar]],  
+                             'sim_signal':namelist['sim_signal'],
+                             'signal_file':namelist['signal_climo_file']
+                             }
+            
+            # r_high = np.arange(1,(lidar_parameter['maximum_range']*1000)+1)
+            # r = np.arange(3e8 * lidar_parameter['gate_width'] * 1e-9 / 4.0 ,lidar_parameter['maximum_range'] * 1000 + 1, 3e8 * lidar_parameter['gate_width'] * 1e-9 / 2.0)
+            # r_high[None,:] - r[:,None]
+            # def sim_observations(lidar_x, lidar_y, lidar_z, pulse_width, gate_width, sample_resolution, maximum_range,
+            #                      nyquist_velocity, coords, model_type, model_time, model_step, files, instantaneous_scan,
+            #                      prefix, model_frequency, nscl, clouds, scan_key,
+            #                      sim_signal, signal_file, namelist, xx = None, yy = None, transform = None):
+                
+            
+            # temp = DLsim.Signal.sim_observations(temp_lidar_x,temp_lidar_y,namelist['lidar_alt'], namelist['pulse_width'],
+            #                     namelist['gate_width'], namelist['sample_resolution'], namelist['maximum_range'], namelist['nyquist_velocity'],
+            #                     [az_el_coords[x] for x in foo[bar]],namelist['model'],model_time[i],namelist['model_timestep'],files, namelist['instantaneous_scan'],
+            #                     dname,namelist['model_frequency'],namelist['ncar_les_nscl'],
+            #                     namelist['clouds'],[scan_key[x] for x in foo[bar]],
+            #                     namelist['sim_signal'],namelist['signal_climo_file'],
+            #                     namelist, xx, yy, transformer)
+            temp_vr,temp_sw,inter = DLsim.Signal.sim_observations(lidar_parameter,namelist, xx, yy, transformer)
+            sys.exit()
+            # c =3e8
+            # pulse_width = namelist['pulse_width'] 
+            # gate_width = namelist['gate_width']
+            # r_high = np.arange(1,5001)
+            # from scipy.special import erf
+
+            # rwf = (1/(c*gate_width*1e-9))*\
+            #       (erf((4*np.sqrt(np.log(2))*(r_high -3000)/(c*pulse_width*1e-9)) + np.sqrt(np.log(2))*gate_width/pulse_width)-\
+            #        erf((4*np.sqrt(np.log(2))*(r_high -3000)/(c*pulse_width*1e-9)) - np.sqrt(np.log(2))*gate_width/pulse_width))
+            
+            
         # If not we move on to the next iteration since no new data  nothing will need
         # to be written to the file
         
