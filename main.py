@@ -49,7 +49,7 @@ if __name__ == "__main__":
         
     
     
-    namelist_file =  'namelist.input'
+    namelist_file =  'namelist_LES.input'
     output_dir = '/Users/hsiuweihsu/Resaerch/Metro_Weather_Project/LidarSim_Hsiu/output'
     debug = True
     
@@ -88,11 +88,10 @@ if __name__ == "__main__":
             print('>>> LidarSim FAILED and ABORTED <<<')
             print("-----------------------------------------------------------------------")
             sys.exit()
-    
+    # sys.exit()
     
     # Now set the scanning schedule. The end product is an array that will specify
     # the space and time of each beam for the scanning period
-    
     
     if namelist['use_calendar'] == 1:
         start_time = datetime(namelist['start_year'],namelist['start_month'],namelist['start_day'],namelist['start_hour'],namelist['start_min'],namelist['start_sec'])
@@ -165,8 +164,10 @@ if __name__ == "__main__":
     # absolutely necessary to read into data. Often this will only be the data slices necessary
     # for the lidar simulation significantly reducing RAM usage.
     
-    sim_obs = []
-    
+    sim_obs = {}
+    sim_obs['vr'] = []
+    sim_obs['sw'] = []
+    # sim_obs_sw = []
     # If the model data is in lat lons, change to x, y using info in the file
     # Right now, I am assuming that files will be like WRF output
     
@@ -267,7 +268,7 @@ if __name__ == "__main__":
         # If the are rays to be simulated, we perform them
         if len(foo[bar]) > 0:
             print("Starting Simulations for " + str(model_time[i]))
-            
+            # sys.exit()
             lidar_parameter={'lidar_x':temp_lidar_x,
                              'lidar_y':temp_lidar_y,
                              'lidar_z':namelist['lidar_alt'],
@@ -308,7 +309,7 @@ if __name__ == "__main__":
             #                     namelist['sim_signal'],namelist['signal_climo_file'],
             #                     namelist, xx, yy, transformer)
             temp_vr,temp_sw,inter = DLsim.Signal.sim_observations(lidar_parameter,namelist, xx, yy, transformer)
-            sys.exit()
+            # sys.exit()
             # c =3e8
             # pulse_width = namelist['pulse_width'] 
             # gate_width = namelist['gate_width']
@@ -322,18 +323,19 @@ if __name__ == "__main__":
             
         # If not we move on to the next iteration since no new data  nothing will need
         # to be written to the file
-        
+            # sys.exit()
         else: 
             print("No simulation needed for " + str(model_time[i]))
             continue     
            
-        if temp[0] is int:
+        if temp_vr[0] is int:
             print('ERROR: Something went wrong in observations simulation')
             sys.exit()
         else:
             # Put the simulated rays in a holding list until they are ready to be written
-            sim_obs.extend(np.copy(temp))
-            
+            sim_obs['vr'].extend(np.copy(temp_vr))
+            sim_obs['sw'].extend(np.copy(temp_sw))
+
         t1 = time.time()
         print("Done with " + str(model_time[i]) + ' in ' + str(t1-t0) + ' secs')
         
@@ -341,16 +343,16 @@ if __name__ == "__main__":
         if namelist['instantaneous_scan'] == 1:
             t0 = time.time()
             DLsim.Data.write_to_file(sim_obs,scan_key[i],lidar_time[i],model_time_key[i],model_time,scans,namelist,i)
-            
+
             t1 = time.time()
             print('Wrote scan ' + str(scan_number) + ' to output file in ' + str(t1-t0) + ' secs')
             
             scan_number = scan_number +1
-            del sim_obs[:]
+            del sim_obs['vr'][:],sim_obs['sw'][:]
         
         else:
              # The current ending index of the scheduled rays 
-            sim_obs_end = sim_obs_begin + len(sim_obs)-1
+            sim_obs_end = sim_obs_begin + len(sim_obs['vr'])-1
         
         
             # We will keep writing to the output file until there are no completed scans left
@@ -363,7 +365,7 @@ if __name__ == "__main__":
                 if ((scan_schedule['start_index'][scan_number] == sim_obs_begin) & (scan_schedule['end_index'][scan_number] <= sim_obs_end)):
                     t0 = time.time()
                     
-                    DLsim.Data.write_to_file(sim_obs[0:scan_schedule['end_index'][scan_number]-sim_obs_begin+1],scan_key[sim_obs_begin:scan_schedule['end_index'][scan_number]+1],lidar_time[sim_obs_begin:scan_schedule['end_index'][scan_number]+1],
+                    DLsim.Data.write_to_file(sim_obs['vr'][0:scan_schedule['end_index'][scan_number]-sim_obs_begin+1],scan_key[sim_obs_begin:scan_schedule['end_index'][scan_number]+1],lidar_time[sim_obs_begin:scan_schedule['end_index'][scan_number]+1],
                               model_time_key[sim_obs_begin:scan_schedule['end_index'][scan_number]+1],model_time,scans,namelist,scan_number)
                 
                     t1 = time.time()
@@ -373,9 +375,9 @@ if __name__ == "__main__":
                 
                     # Remove these rays from the holding list since they are written
                     # to file and update the counters
-                    del sim_obs[0:scan_schedule['end_index'][scan_number]-sim_obs_begin+1]
+                    del sim_obs['vr'][0:scan_schedule['end_index'][scan_number]-sim_obs_begin+1]
                     sim_obs_begin = scan_schedule['end_index'][scan_number]+1
-                    sim_obs_end = sim_obs_begin + len(sim_obs)-1
+                    sim_obs_end = sim_obs_begin + len(sim_obs['vr'])-1
                     scan_number = scan_number + 1
                     if scan_number >= len(scan_schedule['start_index']):
                         keep_writing = False

@@ -822,15 +822,18 @@ class Read_file:
                 temp_v = np.interp(z[i],zzz[foo[0]],v[foo[0]],left=np.nan,right=np.nan)
                 temp_w = np.interp(z[i],zzz[foo[0]],w[foo[0]],left=np.nan,right=np.nan)
             
-                vr.append(((x[i]-lidarx)*temp_u + (y[i]-lidary)*temp_v + (z[i]-lidarz)*temp_w)/np.sqrt((x[i]-lidarx)**2 + (y[i]-lidary)**2 + (z[i]-lidarz)**2))
-    
+                vr.append((( x[i] - lidarx ) * temp_u + ( y[i] - lidary ) * temp_v + ( z[i] - lidarz ) * temp_w) /
+                              np.sqrt(( x[i] - lidarx )**2 + ( y[i] - lidary)**2 + ( z[i] - lidarz)**2))
+                # vr.append(((x[i]-lidarx)*temp_u + (y[i]-lidary)*temp_v + (z[i]-lidarz)*temp_w)/
+                          # np.sqrt((x[i]-lidarx)**2 + (y[i]-lidary)**2 + (z[i]-lidarz)**2))
+
         return np.array(vr)
         
     ##############################################################################
     # Get the data you need from a CM1 simulation
     ##############################################################################
     
-    def get_cm1_data(x,y,z,lidarx,lidary,lidarz,file,cloud,turb,az=None,el=None):
+    def get_cm1_data(x,y,z,lidarx,lidary,lidarz,file,time_step,cloud,turb,az=None,el=None):
         
         if (turb == 1) and ((az is None) or (el is None)):
             raise Exception('The azimuth and elevation need to be passed to function if subgrid turbulence is to be used')
@@ -876,9 +879,9 @@ class Read_file:
         else:
             izmax = np.where(np.max(z) < zz)[0][0]
         
-        u = f['uinterp'][0,:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T
-        v = f['vinterp'][0,:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T
-        w = f['winterp'][0,:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T
+        u = f['uinterp'][time_step,:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T
+        v = f['vinterp'][time_step,:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T
+        w = f['winterp'][time_step,:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T
         
         zzz = zz[:izmax+1,None,None] * np.ones((len(yy[iymin:iymax+1]),len(xx[ixmin:ixmax+1])))[None,:,:]
         
@@ -920,9 +923,10 @@ class Read_file:
         zzz = zzz[foo[0],foo[1],:]
         
         if cloud == 1:
-            qtotal  = (f['qc'][0,:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T +
-                       f['qi'][0,:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T +
-                       f['qr'][0,:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T)
+            # print('cloud')
+            qtotal  = (f['qc'][time_step,:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T +
+                       f['qi'][time_step,:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T +
+                       f['qr'][time_step,:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T)
             
             for j in range(2):
                 qtotal = interp1d(q[j],qtotal,axis=j,bounds_error=False)(qi[j])
@@ -1294,13 +1298,13 @@ class Signal:
         
         
         vr_lidar = np.trapz(integrand,axis=1)  # summation along the RWF
-        print('rwf'+str(rwf.shape))
-        print('vr'+str(vr.shape))
-        print('vr_interp'+str(vr_interp.shape))
-        print('vr_lidar '+str(vr_lidar .shape))
+        # print('rwf'+str(rwf.shape))
+        # print('vr'+str(vr.shape))
+        # print('vr_interp'+str(vr_interp.shape))
+        # print('vr_lidar '+str(vr_lidar .shape))
         # print('rwf'+vr_interp.size)
 
-        sys.exit()
+        # sys.exit()
        
         foo1 = np.where(r > cut_min)[0]
         foo2 = np.where(r < cut_max)[0]
@@ -1344,7 +1348,7 @@ class Signal:
             r = np.arange(1,lidar_parameter['maximum_range'] * 1000,3e8 * lidar_parameter['gate_width'] * 1e-9 /2.0)
         else:
             r = np.arange(lidar_parameter['sample_resolution'],lidar_parameter['maximum_range'] * 1000 + lidar_parameter['sample_resolution'],lidar_parameter['sample_resolution'])
-        print(r.shape)
+        # print(r.shape)
         # Find the maximum and minimum range needed for full gate sample
         # c =3e8
         # r_high = np.arange(1,5001)
@@ -1408,19 +1412,26 @@ class Signal:
                 temp = Read_file.get_ncarles_data(x,y,z,lidar_parameter['lidar_x'],lidar_parameter['lidar_y'],lidar_parameter['lidar_z'],lidar_parameter['files'][foo],lidar_parameter['nscl'])
             
             elif lidar_parameter['model_type'] == 4:
-                foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + 'u.nc')[0][0]
+                foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '_u-003.nc')[0][0]
+                # foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + 'u.nc')[0][0]
+
                 u_file = lidar_parameter['files'][foo]
                 
-                foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + 'v.nc')[0][0]
+                foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '_v-002.nc')[0][0]
+                # foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + 'v.nc')[0][0]
+
                 v_file = lidar_parameter['files'][foo]
                 
-                foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + 'w.nc')[0][0]
+                foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '_w-001.nc')[0][0]
+                # foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + 'w.nc')[0][0]
+
                 w_file = lidar_parameter['files'][foo]
                 
                 temp = Read_file.get_MicroHH_data(x,y,z,lidar_parameter['lidar_x'],lidar_parameter['lidar_y'],lidar_parameter['lidar_z'],lidar_parameter['model_time'], u_file, v_file, w_file)
             
             elif lidar_parameter['model_type'] == 5:
                 print(lidar_parameter['model_time'], lidar_parameter['model_frequency'])
+                # sys.exit()
                 # Come back to this as it can be done better
                 # if int(model_time/model_frequency) < 10:
                 #     print(np.where(np.array(files) == prefix + '_00000' + str(int(model_time/model_frequency))+'.nc'))
@@ -1432,13 +1443,14 @@ class Signal:
                 # elif int(model_time/model_frequency) < 10000:
                 #     foo = np.where(np.array(files) == prefix + '_00' + str(int(model_time/model_frequency))+'.nc')[0][0]
                 # elif int(model_time/model_frequency) < 100000:
-                #     foo = np.where(np.array(files) == prefix + '_0' + str(int(model_time/model_frequency))+'.nc')[0][0]
                 # else:
                 #     foo = np.where(np.array(files) == prefix + '_' + str(int(model_time/model_frequency))+'.nc')[0][0]
                 
-                foo =0 
-                
-                temp = Read_file.get_cm1_data(x,y,z,lidar_parameter['lidar_x'],lidar_parameter['lidar_y'],lidar_parameter['lidar_z'],lidar_parameter['files'][foo],lidar_parameter['clouds'],namelist['turb'],az=azim,el=elev)
+                foo = 0 
+                time_step = np.floor(lidar_parameter['model_time']/lidar_parameter['model_frequency'])
+                # print(time_step)
+                # sys.exit()
+                temp = Read_file.get_cm1_data(x,y,z,lidar_parameter['lidar_x'],lidar_parameter['lidar_y'],lidar_parameter['lidar_z'],lidar_parameter['files'][foo],time_step,lidar_parameter['clouds'],namelist['turb'],az=azim,el=elev)
                 # temp = get_cm1_data(x,y,z,lidar_x,lidar_y,lidar_z,files[foo],clouds,namelist['turb'],az=azim,el=elev)
 
             else:
@@ -1531,14 +1543,21 @@ class Data:
                 scan1_num = fid.createDimension('scan1_num',None)
                 scan1_rays = fid.createDimension('scan1_rays',len(scans[0]))
                 
+                
                 if namelist['dbs1'] == 1:
                     dbs1_r = fid.createDimension('dbs_range1',len(dbs1_rr))
-                    scan1 = fid.createVariable('scan1','f8',('scan1_num','scan1_rays','dbs_range1',))
+                    scan1_vr = fid.createVariable('scan1_vr','f8',('scan1_num','scan1_rays','dbs_range1',))
+                    scan1_sw = fid.createVariable('scan1_sw','f8',('scan1_num','scan1_rays','dbs_range1',))
+
                 else:
-                    scan1 = fid.createVariable('scan1','f8',('scan1_num','scan1_rays','range',))
+                    scan1_vr = fid.createVariable('scan1_vr','f8',('scan1_num','scan1_rays','range',))
+                    scan1_sw = fid.createVariable('scan1_sw','f8',('scan1_num','scan1_rays','range',))
                     
-                scan1.long_name = 'radial velocity from scan 1'
-                scan1.units = 'm/s'
+                scan1_vr.long_name = 'radial velocity from scan 1'
+                scan1_vr.units = 'm/s'
+                scan1_sw.long_name = 'spectrum width from scan 1'
+                scan1_sw.units = 'm/s'
+                
                 
                 scan1_time = fid.createVariable('scan1_time','f8',('scan1_num','scan1_rays',))
                 scan1_time.long_name = 'lidar time of scan 1 rays'
@@ -1728,7 +1747,8 @@ class Data:
         stare_model_time = fid['vertical_stare_mtime']
         
         if len(scans) >= 1:
-            scan1 = fid['scan1']
+            scan1_vr = fid['scan1_vr']
+            scan1_sw = fid['scan1_sw']
             scan1_time = fid['scan1_time']
             scan1_model_time = fid['scan1_mtime']
         
@@ -1749,10 +1769,12 @@ class Data:
         
         if namelist['instantaneous_scan'] == 1:
             foo = np.where(np.array(scan_key) == 0)[0]
+            # print('foo= '+str(foo))
+            # sys.exit()
             if len(foo > 0):
                 temp_index1 = stare.shape[0]
                 temp_index2 = stare.shape[0] + len(foo)
-                stare[temp_index1:temp_index2,:] = np.array([sim_obs[x] for x in foo])[:]
+                stare[temp_index1:temp_index2,:] = np.array([sim_obs['vr'][x] for x in foo])[:]
                 if namelist['use_calendar'] == 1:
                     stare_time[temp_index1:temp_index2] = np.array([(model_time[model_time_key] - datetime(1970,1,1)).total_seconds() - base_time[0]] * len(foo))
                     stare_model_time[temp_index1:temp_index2] = np.array([(model_time[model_time_key] - datetime(1970,1,1)).total_seconds() - base_time[0]] * len(foo))
@@ -1762,19 +1784,23 @@ class Data:
             
             foo = np.where(np.array(scan_key) == 1)[0]
             if len(foo > 0):
-                temp_index1 = scan1.shape[0]
-                scan1[temp_index1,:,:] = np.array([sim_obs[x] for x in foo])[:]
+                temp_index1 = scan1_vr.shape[0]
+                scan1_vr[temp_index1,:,:] = np.array([sim_obs['vr'][x] for x in foo])[:]
+                scan1_sw[temp_index1,:,:] = np.array([sim_obs['sw'][x] for x in foo])[:]
+
                 if namelist['use_calendar'] == 1:
                     scan1_time[temp_index1,:] = np.array([(model_time[model_time_key] - datetime(1970,1,1)).total_seconds() - base_time[0]] * len(foo))
                     scan1_model_time[temp_index1,:] = np.array([(model_time[model_time_key] - datetime(1970,1,1)).total_seconds() - base_time[0]] * len(foo))
                 else:
+                    # print('foo= '+str(len(foo)))
                     scan1_time[temp_index1,:] = np.array([model_time[model_time_key] - base_time[0]] * len(foo))
                     scan1_model_time[temp_index1,:] = np.array([model_time[model_time_key] - base_time[0]] * len(foo))
-            
+                    # print('foo= '+str(np.array([model_time[model_time_key] - base_time[0]])))
+                    # print('foo= '+str(np.array([model_time[model_time_key] - base_time[0]] * len(foo))))
             foo = np.where(np.array(scan_key) == 2)[0]
             if len(foo > 0):
                 temp_index1 = scan2.shape[0]
-                scan2[temp_index1,:,:] = np.array([sim_obs[x] for x in foo])
+                scan2[temp_index1,:,:] = np.array([sim_obs['vr'][x] for x in foo])
                 if namelist['use_calendar'] == 1:
                     scan2_time[temp_index1,:] = np.array([(model_time[model_time_key] - datetime(1970,1,1)).total_seconds() - base_time[0]] * len(foo))
                     scan2_model_time[temp_index1,:] = np.array([(model_time[model_time_key] - datetime(1970,1,1)).total_seconds() - base_time[0]] * len(foo))
@@ -1785,7 +1811,7 @@ class Data:
             foo = np.where(np.array(scan_key) == 3)[0]
             if len(foo > 0):
                 temp_index1 = scan3.shape[0]
-                scan3[temp_index1,:,:] = np.array([sim_obs[x] for x in foo])
+                scan3[temp_index1,:,:] = np.array([sim_obs['vr'][x] for x in foo])
                 if namelist['use_calendar'] == 1:
                     scan3_time[temp_index1,:] = np.array([(model_time[model_time_key] - datetime(1970,1,1)).total_seconds() - base_time[0]] * len(foo))
                     scan3_model_time[temp_index1,:] = np.array([(model_time[model_time_key] - datetime(1970,1,1)).total_seconds() - base_time[0]] * len(foo))
@@ -1796,7 +1822,7 @@ class Data:
             foo = np.where(np.array(scan_key) == 4)[0]
             if len(foo > 0):
                 temp_index1 = scan4.shape[0]
-                scan4[temp_index1,:,:] = np.array([sim_obs[x] for x in foo])
+                scan4[temp_index1,:,:] = np.array([sim_obs['vr'][x] for x in foo])
                 if namelist['use_calendar'] == 1:
                     scan4_time[temp_index1,:] = np.array([(model_time[model_time_key] - datetime(1970,1,1)).total_seconds() - base_time[0]] * len(foo))
                     scan4_model_time[temp_index1,:] = np.array([(model_time[model_time_key] - datetime(1970,1,1)).total_seconds() - base_time[0]] * len(foo))
@@ -1805,11 +1831,13 @@ class Data:
                     scan4_model_time[temp_index1,:] = np.array([model_time[model_time_key] - base_time[0]] * len(foo))
                 
         else:
-            obs = np.array(sim_obs)
+            obs_vr = np.array(sim_obs['vr'])
+            obs_sw = np.array(sim_obs['sw'])
+
             if scan_key[0] == 0:
                 temp_index1 = stare.shape[0]
                 temp_index2 = stare.shape[0] + len(scan_key)
-                stare[temp_index1:temp_index2,:] = obs[:,:]
+                stare[temp_index1:temp_index2,:] = obs_vr[:,:]
                 stare_time[temp_index1:temp_index2] = np.array(lidar_time) - base_time[0]
                 if namelist['use_calendar'] == 1:
                     temp = np.array([(model_time[x] - datetime(1970,1,1)).total_seconds() for x in model_time_key])
@@ -1818,8 +1846,8 @@ class Data:
                 stare_model_time[temp_index1:temp_index2] = temp - base_time[0]
             
             elif scan_key[0] == 1:
-                temp_index1 = scan1.shape[0]
-                scan1[temp_index1,:,:] = obs[:,:]
+                temp_index1 = scan1_vr.shape[0]
+                scan1_vr[temp_index1,:,:] = obs_vr[:,:]
                 scan1_time[temp_index1, :] = np.array(lidar_time) - base_time[0]
                 if namelist['use_calendar'] == 1:
                     temp = np.array([(model_time[x] - datetime(1970,1,1)).total_seconds() for x in model_time_key])
@@ -1829,7 +1857,7 @@ class Data:
             
             elif scan_key[0] == 2:
                 temp_index1 = scan2.shape[0]
-                scan2[temp_index1,:,:] = obs[:,:]
+                scan2[temp_index1,:,:] = obs_vr[:,:]
                 scan2_time[temp_index1, :] = np.array(lidar_time) - base_time[0]
                 if namelist['use_calendar'] == 1:
                     temp = np.array([(model_time[x] - datetime(1970,1,1)).total_seconds() for x in model_time_key])
@@ -1839,7 +1867,7 @@ class Data:
             
             elif scan_key[0] == 3:
                 temp_index1 = scan3.shape[0]
-                scan3[temp_index1,:,:] = obs[:,:]
+                scan3[temp_index1,:,:] = obs_vr[:,:]
                 scan3_time[temp_index1, :] = np.array(lidar_time) - base_time[0]
                 if namelist['use_calendar'] == 1:
                     temp = np.array([(model_time[x] - datetime(1970,1,1)).total_seconds() for x in model_time_key])
@@ -1848,8 +1876,8 @@ class Data:
                 scan3_model_time[temp_index1,:] = temp - base_time[0]
             
             elif scan_key[0] == 4:
-                temp_index1 = scan1.shape[0]
-                scan4[temp_index1,:,:] = obs[:,:]
+                temp_index1 = scan1_vr.shape[0]
+                scan4[temp_index1,:,:] = obs_vr[:,:]
                 scan4_time[temp_index1, :] = np.array(lidar_time) - base_time[0]
                 if namelist['use_calendar'] == 1:
                     temp = np.array([(model_time[x] - datetime(1970,1,1)).total_seconds() for x in model_time_key])
