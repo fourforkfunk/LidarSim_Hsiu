@@ -309,7 +309,7 @@ if __name__ == "__main__":
             #                     namelist['sim_signal'],namelist['signal_climo_file'],
             #                     namelist, xx, yy, transformer)
             temp_vr,temp_sw,inter = DLsim.Signal.sim_observations(lidar_parameter,namelist, xx, yy, transformer)
-            # sys.exit()
+            sys.exit()
             # c =3e8
             # pulse_width = namelist['pulse_width'] 
             # gate_width = namelist['gate_width']

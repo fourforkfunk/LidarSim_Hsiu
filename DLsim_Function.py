@@ -694,99 +694,115 @@ class Read_file:
     ###############################################################################
     # Get data from a MicroHH run.
     ###############################################################################
-       
-    def get_MicroHH_data(x,y,z,lidarx,lidary,lidarz,model_time, u_file,v_file,w_file):
-        fu = Dataset(u_file)
+    def Read_MicroHH_data(model_time, u_file,v_file,w_file):
+        model_data={}
         
-        t = fu['time'][:]
+        fu = Dataset(u_file)        
+        model_data['t'] = fu['time'][:]        
+        foo = np.where(model_data['t'] == model_time)[0][0]        
+        model_data['zz'] = fu['z'][:-1]
+        model_data['yy'] = fu['y'][:-1]
         
-        foo = np.where(t == model_time)[0][0]
-        
-        zz = fu['z'][:-1]
-        yy = fu['y'][:-1]
-        
-        fv = Dataset(v_file)
-        
-        xx = fv['x'][:-1]
-        
+        fv = Dataset(v_file)        
+        model_data['xx']= fv['x'][:-1]        
         fw = Dataset(w_file)
         
-        xx, yy = np.meshgrid(xx, yy)
+        model_data['u'] = fu['u'][foo]
+        model_data['v'] = fv['v'][foo]
+        model_data['w'] = fw['w'][foo]
         
-        zz = zz[:,None,None] * np.ones(xx.shape)[None,:,:]
         
-        zz = zz.T
-        xx = xx.T
-        yy = yy.T
+        model_data['xx'], model_data['yy'] = np.meshgrid(model_data['xx'],  model_data['yy'])
+        # print(model_data['xx'].shape)
+        # sys.exit()
+        model_data['zz'] = model_data['zz'][:,None,None] * np.ones(model_data['xx'].shape)[None,:,:]     
+#        zz = zz[:,None,None] * np.ones(xx.shape)[None,:,:]
+
+        model_data['zz'] = model_data['zz'].T
+        model_data['xx'] = model_data['xx'].T
+        model_data['yy'] = model_data['yy'].T
+        fu.close()
+        fv.close()
+        fw.close()
+        return model_data
+    def get_MicroHH_data2(ray,lidar_parameter,model_data):
         
-        # First check if max x is less than the minimum of the grid or if min x is greater than max x
+        
         # and if so just return a bunch of nans because the beam is never in the domain
-        if (np.max(x) < np.min(xx[:,0])) or (np.min(x) > np.max(xx[:,0])):
-            return np.ones(len(x))*np.nan
+        if (np.max(ray['x']) < np.min(model_data['xx'][:,0])) or (np.min(ray['x']) > np.max(model_data['xx'][:,0])):
+            return np.ones(len(ray['x']))*np.nan
         
         # Do the same thing for y
-        if (np.max(y) < np.min(yy[0])) or (np.min(y) > np.max(yy[0])):
-            return np.ones(len(x))*np.nan
+        if (np.max(ray['y']) < np.min(model_data['yy'][0])) or (np.min(ray['y']) > np.max(model_data['yy'][0])):
+            return np.ones(len(ray['x']))*np.nan
         
-        if np.max(x) > np.max(xx[:,0]):
-            ixmax = len(xx)-1
-            if np.min(x) < np.min(xx[:,0]):
+        if np.max(ray['x']) > np.max(model_data['xx'][:,0]):
+            ixmax = len(model_data['xx'])-1
+            if np.minray_(ray['x']) < np.min(model_data['xx'][:,0]):
                 ixmin = 0
             else:
-                ixmin = np.where((np.min(x) > xx[:,0]))[0][-1]
-        elif np.min(x) < np.min(xx[:,0]):
+                ixmin = np.where((np.min(ray['x']) > model_data['xx'][:,0]))[0][-1]
+        elif np.min(ray['x']) < np.min(model_data['xx'][:,0]):
             ixmin = 0
-            ixmax = np.where((np.max(x) <= xx[:,0]))[0][0]
+            ixmax = np.where((np.max(ray['x']) <= model_data['xx'][:,0]))[0][0]
         else:
-            ixmin, ixmax = np.where((np.min(x) > xx[:,0]))[0][-1], np.where((np.max(x) <= xx[:,0]))[0][0]
+            ixmin, ixmax = np.where((np.min(ray['x']) > model_data['xx'][:,0]))[0][-1], np.where((np.max(ray['x']) <= model_data['xx'][:,0]))[0][0]
         
-        if np.max(y) > np.max(yy[0]):
-            iymax = len(yy)-1
-            if np.min(y) < np.min(yy[0]):
+        if np.max(ray['y']) > np.max(model_data['yy'][0]):
+            iymax = len(model_data['yy'])-1
+            if np.min(ray['y']) < np.min(model_data['yy'][0]):
                 iymin = 0
             else:
-                iymin = np.where((np.min(y) > yy[0]))[0][-1]
-        elif np.min(y) < np.min(yy[0]):
+                iymin = np.where((np.min(ray['y']) > model_data['yy'][0]))[0][-1]
+        elif np.min(ray['y']) < np.min(model_data['yy'][0]):
             iymin = 0
-            iymax = np.where((np.max(y) <= yy[0]))[0][0]
+            iymax = np.where((np.max(ray['y']) <= model_data['yy'][0]))[0][0]
         else:
-            iymin, iymax = np.where((np.min(y) > yy[0]))[0][-1], np.where((np.max(y) <= yy[0]))[0][0]
+            iymin, iymax = np.where((np.min(ray['y']) > model_data['yy'][0]))[0][-1], np.where((np.max(ray['y']) <= model_data['yy'][0]))[0][0]
         
-        if np.max(z) > np.max(np.min(np.min(zz,axis=0),axis=0)):
-            izmax = zz.shape[0]-1
+        if np.max(ray['z']) > np.max(np.min(np.min(model_data['zz'],axis=0),axis=0)):
+            izmax = model_data['zz'].shape[0]-1
         else:
-            izmax = np.where(np.max(z) < np.min(np.min(zz,axis=0),axis=0))[0][0]
+            izmax = np.where(np.max(ray['z']) < np.min(np.min(model_data['zz'],axis=0),axis=0))[0][0]
        
-        u = fu['u'][foo] 
+        u = model_data['u']#[foo] 
         u = (u[:-1,:-1,1:] + u[:-1,:-1,:-1])/2.
         u = u[:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T
         
-        fu.close()
+        # fu.close()
      
-        v = fv['v'][foo]
+        v = model_data['v']#[foo]
         v = (v[:-1,1:,:-1] + v[:-1,:-1,:-1])/2.
         v = v[:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T
         
-        fv.close()
+        # fv.close()
       
-        w = fw['w'][foo]
+        w = model_data['w']#[foo]
         w = (w[1:,:-1,:-1] + w[:-1,:-1,:-1])/2.
         w = w[:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T
         
-        fw.close()
+        # fw.close()
         
-        zzz = zz[ixmin:ixmax+1,iymin:iymax+1,:izmax+1]
+        zzz = model_data['zz'][ixmin:ixmax+1,iymin:iymax+1,:izmax+1]
         
-        qi = (x,y)
-        q = (xx[ixmin:ixmax+1,0],yy[0,iymin:iymax+1])
-                
-        idx = np.identity(len(x))*np.arange(1,len(x)+1)
+        qi = (ray['x'],ray['y'])
+        # print(qi[0].shape)
+        # print(qi[1])
+        # print(xx.shape)
+        # print(yy.shape)
+        q = (model_data['xx'][ixmin:ixmax+1,0],model_data['yy'][0,iymin:iymax+1])
+        # print(q[0].shape)
+        # print(q[1].shape)
+        # sys.exit()
+        # print(q)
+        # sys.exit()
+        idx = np.identity(len(ray['x']))*np.arange(1,len(ray['x'])+1)
         
         for j in range(2):
             u = interp1d(q[j],u,axis=j,bounds_error=False)(qi[j])
             idx = np.delete(idx,np.where(np.isnan(u))[j],axis=j)
             u = np.delete(u,np.where(np.isnan(u))[j],axis=j)
-    
+
         foo = np.where(idx != 0)
     
         u = u[foo[0],foo[1],:]
@@ -810,23 +826,186 @@ class Read_file:
         zzz = zzz[foo[0],foo[1],:]
         
         idx = (idx[foo] - 1).astype(int)
-    
+        # print(foo[0].shape)
+        # print(foo[1].shape)
+
+        # print(w.shape)
+        # sys.exit()
         vr = []
-        for i in range(len(x)):
+        for i in range(len(ray['x'])):
             foo = np.where(i == idx)[0]
+            # print(i,zzz[foo[0]])
             
             if len(foo) == 0:
                 vr.append(np.nan)
             else:
-                temp_u = np.interp(z[i],zzz[foo[0]],u[foo[0]],left=np.nan,right=np.nan)
-                temp_v = np.interp(z[i],zzz[foo[0]],v[foo[0]],left=np.nan,right=np.nan)
-                temp_w = np.interp(z[i],zzz[foo[0]],w[foo[0]],left=np.nan,right=np.nan)
-            
-                vr.append((( x[i] - lidarx ) * temp_u + ( y[i] - lidary ) * temp_v + ( z[i] - lidarz ) * temp_w) /
-                              np.sqrt(( x[i] - lidarx )**2 + ( y[i] - lidary)**2 + ( z[i] - lidarz)**2))
+                temp_u = np.interp(ray['z'][i],zzz[foo[0]],u[foo[0]],left=np.nan,right=np.nan)
+                temp_v = np.interp(ray['z'][i],zzz[foo[0]],v[foo[0]],left=np.nan,right=np.nan)
+                temp_w = np.interp(ray['z'][i],zzz[foo[0]],w[foo[0]],left=np.nan,right=np.nan)
+            # lidar_parameter['lidarx'],lidar_parameter['lidary'],lidar_parameter['lidarz']
+                vr.append((( ray['x'][i] - lidar_parameter['lidar_x'] ) * temp_u +
+                           ( ray['y'][i] - lidar_parameter['lidar_y'] ) * temp_v + 
+                           ( ray['z'][i] - lidar_parameter['lidar_z'] ) * temp_w) /
+                             np.sqrt(( ray['x'][i] - lidar_parameter['lidar_x'])**2 +
+                                     ( ray['y'][i] - lidar_parameter['lidar_y'])**2 +
+                                     ( ray['z'][i] - lidar_parameter['lidar_z'])**2))
                 # vr.append(((x[i]-lidarx)*temp_u + (y[i]-lidary)*temp_v + (z[i]-lidarz)*temp_w)/
                           # np.sqrt((x[i]-lidarx)**2 + (y[i]-lidary)**2 + (z[i]-lidarz)**2))
+        # sys.exit()
+        return np.array(vr)
+        
 
+    def get_MicroHH_data(ray_x,ray_y,ray_z,lidarx,lidary,lidarz,model_time, u_file,v_file,w_file):
+        fu = Dataset(u_file)
+        
+        t = fu['time'][:]
+        
+        foo = np.where(t == model_time)[0][0]
+        
+        zz = fu['z'][:-1]
+        yy = fu['y'][:-1]
+        
+        fv = Dataset(v_file)
+        
+        xx = fv['x'][:-1]
+
+        # print(qi[1])
+        
+        
+        fw = Dataset(w_file)
+        
+        xx, yy = np.meshgrid(xx, yy)
+        # print(xx.shape)
+        # print(yy.shape)
+        print(xx.shape)
+        sys.exit()
+        zz = zz[:,None,None] * np.ones(xx.shape)[None,:,:]
+        
+        zz = zz.T
+        xx = xx.T
+        yy = yy.T
+        
+        # First check if max x is less than the minimum of the grid or if min x is greater than max x
+        # and if so just return a bunch of nans because the beam is never in the domain
+        if (np.max(ray_x) < np.min(xx[:,0])) or (np.min(ray_x) > np.max(xx[:,0])):
+            return np.ones(len(ray_x))*np.nan
+        
+        # Do the same thing for y
+        if (np.max(ray_y) < np.min(yy[0])) or (np.min(ray_y) > np.max(yy[0])):
+            return np.ones(len(ray_x))*np.nan
+        
+        if np.max(ray_x) > np.max(xx[:,0]):
+            ixmax = len(xx)-1
+            if np.minray_(ray_x) < np.min(xx[:,0]):
+                ixmin = 0
+            else:
+                ixmin = np.where((np.min(ray_x) > xx[:,0]))[0][-1]
+        elif np.min(ray_x) < np.min(xx[:,0]):
+            ixmin = 0
+            ixmax = np.where((np.max(ray_x) <= xx[:,0]))[0][0]
+        else:
+            ixmin, ixmax = np.where((np.min(ray_x) > xx[:,0]))[0][-1], np.where((np.max(ray_x) <= xx[:,0]))[0][0]
+        
+        if np.max(ray_y) > np.max(yy[0]):
+            iymax = len(yy)-1
+            if np.min(ray_y) < np.min(yy[0]):
+                iymin = 0
+            else:
+                iymin = np.where((np.min(ray_y) > yy[0]))[0][-1]
+        elif np.min(ray_y) < np.min(yy[0]):
+            iymin = 0
+            iymax = np.where((np.max(ray_y) <= yy[0]))[0][0]
+        else:
+            iymin, iymax = np.where((np.min(ray_y) > yy[0]))[0][-1], np.where((np.max(ray_y) <= yy[0]))[0][0]
+        
+        if np.max(ray_z) > np.max(np.min(np.min(zz,axis=0),axis=0)):
+            izmax = zz.shape[0]-1
+        else:
+            izmax = np.where(np.max(ray_z) < np.min(np.min(zz,axis=0),axis=0))[0][0]
+       
+        u = fu['u'][foo] 
+        u = (u[:-1,:-1,1:] + u[:-1,:-1,:-1])/2.
+        u = u[:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T
+        
+        fu.close()
+     
+        v = fv['v'][foo]
+        v = (v[:-1,1:,:-1] + v[:-1,:-1,:-1])/2.
+        v = v[:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T
+        
+        fv.close()
+      
+        w = fw['w'][foo]
+        w = (w[1:,:-1,:-1] + w[:-1,:-1,:-1])/2.
+        w = w[:izmax+1,iymin:iymax+1,ixmin:ixmax+1].T
+        
+        fw.close()
+        
+        zzz = zz[ixmin:ixmax+1,iymin:iymax+1,:izmax+1]
+        
+        qi = (ray_x,ray_y)
+        # print(qi[0].shape)
+        # print(qi[1])
+        # print(xx.shape)
+        # print(yy.shape)
+        q = (xx[ixmin:ixmax+1,0],yy[0,iymin:iymax+1])
+        # print(q[0].shape)
+        # print(q[1].shape)
+        # sys.exit()
+        # print(q)
+        # sys.exit()
+        idx = np.identity(len(ray_x))*np.arange(1,len(ray_x)+1)
+        
+        for j in range(2):
+            u = interp1d(q[j],u,axis=j,bounds_error=False)(qi[j])
+            idx = np.delete(idx,np.where(np.isnan(u))[j],axis=j)
+            u = np.delete(u,np.where(np.isnan(u))[j],axis=j)
+
+        foo = np.where(idx != 0)
+    
+        u = u[foo[0],foo[1],:]
+    
+        for j in range(2):
+            v = interp1d(q[j],v,axis=j,bounds_error=False)(qi[j])
+            v = np.delete(v,np.where(np.isnan(v))[j],axis=j)
+        
+        v = v[foo[0],foo[1],:]
+        
+        for j in range(2):
+            w = interp1d(q[j],w,axis=j,bounds_error=False)(qi[j])
+            w = np.delete(w,np.where(np.isnan(w))[j],axis=j)
+        
+        w = w[foo[0],foo[1],:]
+        
+        for j in range(2):
+            zzz = interp1d(q[j],zzz,axis=j,bounds_error=False)(qi[j])
+            zzz = np.delete(zzz,np.where(np.isnan(zzz))[j],axis=j)
+        
+        zzz = zzz[foo[0],foo[1],:]
+        
+        idx = (idx[foo] - 1).astype(int)
+        # print(foo[0].shape)
+        # print(foo[1].shape)
+
+        # print(w.shape)
+        # sys.exit()
+        vr = []
+        for i in range(len(ray_x)):
+            foo = np.where(i == idx)[0]
+            # print(i,zzz[foo[0]])
+            
+            if len(foo) == 0:
+                vr.append(np.nan)
+            else:
+                temp_u = np.interp(ray_z[i],zzz[foo[0]],u[foo[0]],left=np.nan,right=np.nan)
+                temp_v = np.interp(ray_z[i],zzz[foo[0]],v[foo[0]],left=np.nan,right=np.nan)
+                temp_w = np.interp(ray_z[i],zzz[foo[0]],w[foo[0]],left=np.nan,right=np.nan)
+            
+                vr.append((( ray_x[i] - lidarx ) * temp_u + ( ray_y[i] - lidary ) * temp_v + ( ray_z[i] - lidarz ) * temp_w) /
+                              np.sqrt(( ray_x[i] - lidarx )**2 + ( ray_y[i] - lidary)**2 + ( ray_z[i] - lidarz)**2))
+                # vr.append(((x[i]-lidarx)*temp_u + (y[i]-lidary)*temp_v + (z[i]-lidarz)*temp_w)/
+                          # np.sqrt((x[i]-lidarx)**2 + (y[i]-lidary)**2 + (z[i]-lidarz)**2))
+        # sys.exit()
         return np.array(vr)
         
     ##############################################################################
@@ -889,7 +1068,7 @@ class Read_file:
         
         qi = (x,y)
         q = (xx[ixmin:ixmax+1],yy[iymin:iymax+1])
-        
+
         # Although inefficient I am braking this up into 4 different loops because
         # I am concerned about memory usage for a long range lidar
         
@@ -1281,7 +1460,8 @@ class Signal:
         
         # vr is the vr interpolated by the model dimsnsion
         vr_interp = np.interp(r_high,r_sample,vr,left=np.nan,right=np.nan) # all vr intepolated again along the beam
-
+        # print(vr_interp.shape)
+        # sys.exit()
         foo = np.where(~np.isnan(vr_interp))[0]
         
         if len(foo) > 0:
@@ -1370,6 +1550,21 @@ class Signal:
             
         sim_obs_vr = []   
         sim_obs_sw = []    
+        # Read the data------------------------------------------------------------
+        if lidar_parameter['model_type'] == 4:
+            foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '_u-003.nc')[0][0]
+            u_file = lidar_parameter['files'][foo]            
+            foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '_v-002.nc')[0][0]
+            v_file = lidar_parameter['files'][foo]            
+            foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '_w-001.nc')[0][0]
+            w_file = lidar_parameter['files'][foo]            
+            # temp = Read_file.get_MicroHH_data(x,y,z,lidar_parameter['lidar_x'],lidar_parameter['lidar_y'],lidar_parameter['lidar_z'],lidar_parameter['model_time'], u_file, v_file, w_file)
+            model_data = Read_file.Read_MicroHH_data(lidar_parameter['model_time'], u_file,v_file,w_file)
+            
+            
+            
+            # print(temp.shape)
+
 
         for j in range(num):
             if lidar_parameter['instantaneous_scan'] == 0:
@@ -1412,23 +1607,33 @@ class Signal:
                 temp = Read_file.get_ncarles_data(x,y,z,lidar_parameter['lidar_x'],lidar_parameter['lidar_y'],lidar_parameter['lidar_z'],lidar_parameter['files'][foo],lidar_parameter['nscl'])
             
             elif lidar_parameter['model_type'] == 4:
-                foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '_u-003.nc')[0][0]
-                # foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + 'u.nc')[0][0]
+                # foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '_u-003.nc')[0][0]
+                # # foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + 'u.nc')[0][0]
 
-                u_file = lidar_parameter['files'][foo]
+                # u_file = lidar_parameter['files'][foo]
                 
-                foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '_v-002.nc')[0][0]
-                # foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + 'v.nc')[0][0]
+                # foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '_v-002.nc')[0][0]
+                # # foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + 'v.nc')[0][0]
 
-                v_file = lidar_parameter['files'][foo]
+                # v_file = lidar_parameter['files'][foo]
                 
-                foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '_w-001.nc')[0][0]
-                # foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + 'w.nc')[0][0]
+                # foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + '_w-001.nc')[0][0]
+                # # foo = np.where(np.array(lidar_parameter['files']) == lidar_parameter['prefix'] + 'w.nc')[0][0]
 
-                w_file = lidar_parameter['files'][foo]
+                # w_file = lidar_parameter['files'][foo]
                 
-                temp = Read_file.get_MicroHH_data(x,y,z,lidar_parameter['lidar_x'],lidar_parameter['lidar_y'],lidar_parameter['lidar_z'],lidar_parameter['model_time'], u_file, v_file, w_file)
-            
+                # temp = Read_file.get_MicroHH_data(x,y,z,lidar_parameter['lidar_x'],lidar_parameter['lidar_y'],lidar_parameter['lidar_z'],lidar_parameter['model_time'], u_file, v_file, w_file)
+                ray={'x':x,
+                      'y':y,
+                      'z':z                     
+                      }
+                temp = Read_file.get_MicroHH_data2(ray,lidar_parameter,model_data)
+
+                
+                
+                
+                # print(temp.shape)
+                # sys.exit()
             elif lidar_parameter['model_type'] == 5:
                 print(lidar_parameter['model_time'], lidar_parameter['model_frequency'])
                 # sys.exit()
@@ -1459,6 +1664,8 @@ class Signal:
             
             # Now we get the vr that the lidar would observe assuming a gaussian pulse
             temp_vr,temp_sw  = Signal.gaussian_pulse(temp,lidar_parameter,cut_off,r,key,elev,namelist)
+            # print(temp_vr.shape)
+            # sys.exit()
             # def gaussian_pulse(vr,pulse_width,gate_width,maximum_range,nyquist_velocity,cut_off,r_sample,
             #                    key, elev, namelist):
             
