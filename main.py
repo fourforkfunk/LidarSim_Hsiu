@@ -289,7 +289,10 @@ if __name__ == "__main__":
                              'clouds':namelist['clouds'],
                              'scan_key':[scan_key[x] for x in foo[bar]],  
                              'sim_signal':namelist['sim_signal'],
-                             'signal_file':namelist['signal_climo_file']
+                             'signal_file':namelist['signal_climo_file'],
+                             'scan_type':namelist['scan_type'],
+                             'scan_type_direction':namelist['scan_type_direction'],
+                             'psudeo_pulses':namelist['psudeo_pulses']
                              }
             
             # r_high = np.arange(1,(lidar_parameter['maximum_range']*1000)+1)
@@ -309,7 +312,7 @@ if __name__ == "__main__":
             #                     namelist['sim_signal'],namelist['signal_climo_file'],
             #                     namelist, xx, yy, transformer)
             temp_vr,temp_sw,inter = DLsim.Signal.sim_observations(lidar_parameter,namelist, xx, yy, transformer)
-            sys.exit()
+            # sys.exit()
             # c =3e8
             # pulse_width = namelist['pulse_width'] 
             # gate_width = namelist['gate_width']
